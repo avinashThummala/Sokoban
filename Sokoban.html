@@ -1,0 +1,472 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html>
+
+    <head>
+
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+        <meta content="utf-8" http-equiv="encoding">    
+
+        <style>
+
+            .eSpace { background-image: url(./images/Space.bmp); } 
+            .wall1 { background-image: url(./images/Wall1.bmp); } 
+            .wall2 { background-image: url(./images/Wall2.bmp); }
+            .wall3 { background-image: url(./images/Wall3.bmp); }
+            .wall4 { background-image: url(./images/Wall4.bmp); }
+            .boxInESpace { background-image: url(./images/Box.bmp); } 
+            .emptyEndZone { background-image: url(./images/EndZone.bmp); } 
+            .boxInEndZone { background-image: url(./images/BoxInEndZone.bmp); } 
+            .manInESpace { background-image: url(./images/Man.bmp); } 
+            .manInEndZone { background-image: url(./images/ManInEndZone.bmp); } 
+
+            #gameZone {border: thin solid black; position: absolute}             
+            #gameZone div { float: left; position: relative;}
+
+        </style>
+
+    </head>
+
+    <title>Sokoban</title>
+
+    <body onload="loadGame(2)">
+        <div id="gameZone"></div>
+    </body>        
+       
+    <script language="JavaScript1.2" type="text/javascript">
+
+        //Legend:
+        //   => Empty space
+        // # => Wall
+        // @ => Man in Empty space
+        // $ => Box
+        // . => Empty endzone
+        // * => An endzone with a box
+        // + => Man in End zone
+
+        //Holds all the levels. Each level is represented as a list of strings. Each string in the list represents a row.        
+        levelData=[                    
+                    [    
+                        "           ########",
+                        "           #  ....#",
+                        "############  ....#",
+                        "#    #  $ $   ....#",
+                        "# $$$#$  $ #  ....#",
+                        "#  $     $ #  ....#",
+                        "# $$ #$ $ $########",
+                        "#  $ #     #       ",
+                        "## #########       ",
+                        "#    #    ##       ",
+                        "#     $   ##       ",
+                        "#  $$#$$  @#       ",
+                        "#    #    ##       ",
+                        "###########        "
+                    ], 
+                    [
+                        "#  ####  #### #### ",
+                        "####..####..###..##",
+                        "+                  ",
+                        "#  #  #  #  # #  ##",
+                        "#  #  #  #  # #   #",
+                        "#     #          ##",
+                        "#  #   #  #  #$$$ #",
+                        "#     $     #  #  #",
+                        "##### $   ###  #  #",
+                        "#    $$$ $  #  $$$#",
+                        "##  # #  #  #  #  #",
+                        "      #  #     #   ",
+                        " ####.####..####..#",
+                        "##  ###  ####  ####"
+                    ]];        
+
+        //Holds the current state of the game using css div elements. 
+        //Each div element corresponds to a position to a position in the grid                    
+        levelDivs=[];                     
+
+        pLevel=0; //Present level. 
+        numLevels=0; //Number of levels
+        pX=0, pY=0; //Current position of the man
+
+        boxWidth=28, boxHeight=28; //Size of each div element. 
+        //They need to be modified if you want to use a different skin. 
+        //Just plug in the new size of images and change the paths of those images above.
+        //Do take care to handle the four types of walls, that I mention below.
+        //You can scrap that and just plug in a single wall image for the four types, if you want.
+                              
+
+        //This is where everything starts. 
+        //Call this function on load with the number of levels you want the game to load.
+        //Just include  that many levels in levelData above and you are done.                               
+        function loadGame(nLevels)
+        {            
+            numLevels=nLevels;
+            loadNextLevel();
+            loadEventHandler();
+        }
+
+        //Check whether the level is finished.
+        //Simple, check the className associated with div elements to see whether there is a box in empty space.
+        function isLevelDone()
+        {
+            for (var n = 0; n < levelDivs.length; n++) 
+
+                for (var m = 0; m < levelDivs[n].length; m++) 
+
+                    if (levelDivs[n][m].className == getBoxInESpaceClassName()) 
+                        return false;
+
+            return true;
+        }        
+
+        //KeyEvent handler
+        function loadEventHandler()
+        {
+            var dX, dY, presentCell, nextCell, nextBoxCell;
+
+            var eListener = function(evnt) 
+            {
+
+                if(evnt.keyCode==37) //Left
+                {
+                    dX=-1;
+                    dY=0;
+                }
+                else if(evnt.keyCode==39) //Right
+                {
+                    dX=1;
+                    dY=0;
+                }
+                else if(evnt.keyCode==38) //Down
+                {
+                    dX=0;
+                    dY=-1;
+                }
+                else if(evnt.keyCode==40) //up
+                {
+                    dX=0;
+                    dY=1;
+                }
+                else 
+                    return;
+
+                presentCell=levelDivs[pY][pX];
+                nextCell=levelDivs[pY+dY][pX+dX];
+
+                if( isWall(nextCell.className) ) //Check whether the next cell is a wall. You can't move.
+                    return;
+
+                if( hasBox(nextCell.className) ) //Check whether the next cell is a box. 
+                {
+                    nextBoxCell=levelDivs[pY + dY + dY][pX + dX + dX]; //The next cell after the box in same direction
+
+                    if( isWall(nextBoxCell.className) || hasBox(nextBoxCell.className) ) //Box can't be moved
+                        return;
+
+                    //Box can be moved. Updated the div element classNames to reflect movement
+                    nextBoxCell.className=getNextBoxCellClassName(nextBoxCell.className);
+                    nextCell.className=getPBoxCellClassName(nextCell.className);
+
+                }
+                
+                //Update the div elemnet classNames to reflect the movement of man.
+                presentCell.className=getPCellClassName(presentCell.className);
+                nextCell.className=getNextCellClassName(nextCell.className);
+
+                //Update present position of the man
+                pX += dX;
+                pY += dY;
+
+                if(isLevelDone()) //Check whether level is done
+                {
+                    pLevel++; //Update level
+
+                    if(pLevel<numLevels) //Another level available
+                    {
+                        alert('Loading Level - '+(pLevel+1));                    
+
+                        delCurrentLevel(); //Delete the div elements (levelDivs) associated with the current level
+                        loadNextLevel(); //Load the new level
+                    }
+                    else
+                    {
+                        //Next level doesn't exist
+                        alert('Sorry, this version only supports '+numLevels+' levels at the moment');
+
+                        //Remove this key event listener
+                        window.removeEventListener("keydown", eListener);
+                    }
+
+                }
+
+            }
+
+            //Add the keyevent listsner to the window
+            window.addEventListener('keydown', eListener);            
+        }
+
+        //Remove div elements associated with the present level
+        //Use the parent div to remove them
+        function delCurrentLevel()
+        {
+            gameZoneDiv=document.getElementById('gameZone');            
+
+            for (var n = 0; n < levelDivs.length; n++) 
+
+                for (var m = 0; m < levelDivs[n].length; m++) 
+
+                    gameZoneDiv.removeChild(levelDivs[n][m]);
+
+        }
+
+        //Adjust the width, height, starting x and y of the drawingArea based on boxWidth and boxHeight.
+        //boxWidth and boxHeight -> Width, Height of images included
+        function adjustGameZone()
+        {
+            gHeight=boxHeight*levelData[pLevel].length;
+            gWidth=boxWidth*levelData[pLevel][0].length;
+
+            gameZoneDiv=document.getElementById('gameZone');
+
+            gameZoneDiv.style.width=gWidth+"px";
+            gameZoneDiv.style.height=gHeight+"px";
+
+            gameZoneDiv.style.left=(getDocWidth()-gWidth)/2+"px";
+            gameZoneDiv.style.top=(getDocHeight()-gHeight)/2+"px";
+        }
+
+        //Based on the variable pLevel, add the relevant div elements to levelDivs based on levelData[pLevel]
+        function loadNextLevel()
+        {
+            adjustGameZone();
+
+            gameZoneDiv=document.getElementById('gameZone'); //Drawing area of the game
+
+            levelDivs=[];
+
+            for (var n=0; n<levelData[pLevel].length; n++)
+            {
+                levelDivs[n]=[];
+
+                for (var m=0; m<levelData[pLevel][n].length; m++) 
+                {                
+                    elementDiv=getElementDiv(levelData[pLevel][n][m], n, m);
+
+                    levelDivs[n].push(elementDiv);
+                    gameZoneDiv.appendChild(elementDiv);//Add the div element to the drawing area                    
+
+                    if (levelData[pLevel][n][m]=='@' || levelData[pLevel][n][m]=='+') //Initial position of the man
+                    {
+                        pX=m;
+                        pY=n;
+                    }
+
+                }
+
+            }            
+                                
+        }      
+
+        //Get the new className associated with the next box cell, when the man pushes a box
+        function getNextBoxCellClassName(oldCName)
+        {
+            return oldCName==getEmptyEndZoneClassName() ? getBoxInEndZoneClassName() : getBoxInESpaceClassName();
+        }        
+
+        //Get the new className associated with the present box cell, when the man pushes a box
+        function getPBoxCellClassName(oldCName)
+        {
+            return oldCName==getBoxInEndZoneClassName() ? getEmptyEndZoneClassName() : getESpaceClassName();
+        }
+
+        //Get the new className associated with the present cell, when the man makes a move
+        function getPCellClassName(oldCName)
+        {
+            return oldCName==getManInEndZoneClassName() ? getEmptyEndZoneClassName() : getESpaceClassName();
+        }
+
+        //Get the new className associated with the next cell, when the man makes a move
+        function getNextCellClassName(oldCName)
+        {
+            return oldCName==getEmptyEndZoneClassName() ? getManInEndZoneClassName() : getManInESpaceClassName();
+        }         
+
+        //Check whether the div element's className represents a wall
+        //We have four types of wall elements as discussed below.        
+        function isWall(cName)
+        {
+            if(cName==getWall1ClassName() || cName==getWall2ClassName() || cName==getWall3ClassName() || cName==getWall4ClassName())
+                return true;
+
+            return false;
+        }
+
+        //Check whether the div element's className represents a box
+        function hasBox(cName)
+        {
+            if(cName==getBoxInESpaceClassName() || cName==getBoxInEndZoneClassName())
+                return true;
+
+            return false;
+        }
+
+        //Get height of the document to position the gameArea in the center
+        function getDocHeight() 
+        {
+            var D = document;
+
+            return Math.max(
+                D.body.scrollHeight, D.documentElement.scrollHeight,
+                D.body.offsetHeight, D.documentElement.offsetHeight,
+                D.body.clientHeight, D.documentElement.clientHeight
+            );
+
+        }   
+
+        //Get width of the document to position the gameArea in the center
+        function getDocWidth() 
+        {
+            var D = document;
+
+            return Math.max(
+                D.body.scrollWidth, D.documentElement.scrollWidth,
+                D.body.offsetWidth, D.documentElement.offsetWidth,
+                D.body.clientWidth, D.documentElement.clientWidth
+            );
+
+        }
+
+        //Given a character from levelData, return the associated div className
+        function getClassName(ch, m, n)
+        {
+            switch(ch)
+            {
+                case ' ':
+                    return getESpaceClassName();
+                case '#':
+                    return getWallClassName(m, n); //Return one of the four wall classNames
+                case '$':
+                    return getBoxInESpaceClassName();
+                case '.':
+                    return getEmptyEndZoneClassName();
+                case '*':
+                    return getBoxInEndZoneClassName();
+                case '@':
+                    return getManInESpaceClassName();
+                case '+':
+                    return getManInEndZoneClassName();
+            }
+
+        }                  
+
+        //Sets up the element divs to be added to the gameArea
+        function getElementDiv(data, m, n)
+        {
+            elementDiv=document.createElement('div')
+            elementDiv.className= getClassName(data, m, n);
+
+            elementDiv.style.width=boxWidth+"px"; //ImageWidth
+            elementDiv.style.height=boxHeight+"px"; //ImageHeight
+
+            return elementDiv;            
+        }           
+
+        //Check whether the position (m,n) is in bounds.
+        //In this case we only need to check the lateral movement
+        function isInBounds(m, n)
+        {
+            var width=levelData[pLevel][0].length;
+
+            if(n>=0 && n<width)
+                return true;
+
+            return false;
+        }
+
+        //Returns whether the position (m,n) has a wall
+        function checkWall(m, n)
+        {
+            if(isInBounds(m, n) && levelData[pLevel][m][n]=='#')
+                return true;
+
+            return false;
+        }
+
+        function getWallClassName(m, n)
+        {
+            //Check whether there is a wall to the left or to the right
+            //We can use different images in the four different cases.
+            //Thats exactly why we have four types of wall images
+            var aBool=checkWall(m,n-1), bBool=checkWall(m,n+1);
+
+            if( aBool && bBool )
+                return getWall3ClassName(); 
+
+            else if( !aBool && bBool )
+                return getWall2ClassName();
+
+            else if( aBool && !bBool )
+                return getWall4ClassName();
+
+            else
+                return getWall1ClassName();
+        }
+
+        //Based on these div classNames the relevant CSS styles (background images) will be loaded.
+
+        function getESpaceClassName()
+        {
+            return "eSpace";
+        }        
+
+        //No wall either to the left or to the right
+        function getWall1ClassName()
+        {
+            return "wall1";
+        }
+
+        //A wall to the right
+        function getWall2ClassName()
+        {
+            return "wall2";
+        } 
+
+        //A wall to both the left and the right
+        function getWall3ClassName()
+        {
+            return "wall3";
+        }
+
+        //A wall to the left
+        function getWall4ClassName()
+        {
+            return "wall4";
+        }
+
+        function getBoxInESpaceClassName()
+        {
+            return "boxInESpace";
+        }
+
+        function getEmptyEndZoneClassName()
+        {
+            return "emptyEndZone";
+        }    
+
+        function getBoxInEndZoneClassName()
+        {
+            return "boxInEndZone";            
+        } 
+            
+        function getManInESpaceClassName()
+        {
+            return "manInESpace";            
+        }
+
+        function getManInEndZoneClassName()
+        {
+            return "manInEndZone";            
+        }
+
+    </script>
+
+</html>
